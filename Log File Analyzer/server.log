@@ -1,0 +1,8 @@
+2026-06-06 08:00:01 INFO - Server initialized.
+2026-06-06 08:05:12 WARNING - High memory usage detected.
+2026-06-06 08:10:45 ERROR - Database connection timeout.
+
+2026-06-06 08:15:00 INFO - User login successful.
+2026-06-06 08:20:11 ERROR - Null pointer exception in module X.
+
+2026-06-06 08:25:30 INFO - Server stopped.

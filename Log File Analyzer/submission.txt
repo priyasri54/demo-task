@@ -1,0 +1,873 @@
+LOG FILE ANALYZER
+
+log_analyzer.py
+
+
+
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+
+# ============================================================
+# Data Model
+# ============================================================
+
+@dataclass
+class LogReport:
+    """
+    Stores the complete log analysis report.
+    """
+
+    total_logs: int
+    info_count: int
+    warning_count: int
+    error_count: int
+    invalid_count: int
+    most_frequent: str
+    error_logs: List[str]
+
+
+# ============================================================
+# Log Line Parser
+# ============================================================
+
+def parse_log_line(
+    line: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Parses a single log line.
+
+    Expected format:
+        YYYY-MM-DD HH:MM:SS LEVEL - Message
+
+    Example:
+        2026-06-06 10:00:00 INFO - System started successfully
+    """
+
+    cleaned = line.strip()
+
+    # Ignore empty lines
+    if not cleaned:
+        return None, None
+
+    # Split the log into parts
+    parts = cleaned.split(maxsplit=3)
+
+    # Validate basic structure
+    if len(parts) != 4:
+        raise ValueError(
+            "Invalid log format. Expected: "
+            "TIMESTAMP LEVEL - MESSAGE"
+        )
+
+    date = parts[0]
+    time = parts[1]
+    level = parts[2].upper()
+    separator = parts[3]
+
+    # Validate date/time structure
+    if len(date) != 10 or date[4] != "-" or date[7] != "-":
+        raise ValueError(
+            "Invalid date format."
+        )
+
+    if len(time) != 8 or time[2] != ":" or time[5] != ":":
+        raise ValueError(
+            "Invalid time format."
+        )
+
+    # Validate log level
+    if level == "INFO":
+        pass
+
+    elif level == "WARNING":
+        pass
+
+    elif level == "ERROR":
+        pass
+
+    else:
+        raise ValueError(
+            f"Invalid log level: '{level}'"
+        )
+
+    # Validate separator/message
+    if not separator.startswith("-"):
+        raise ValueError(
+            "Invalid log message format."
+        )
+
+    message = separator[1:].strip()
+
+    if not message:
+        raise ValueError(
+            "Log message cannot be empty."
+        )
+
+    return level, cleaned
+
+
+# ============================================================
+# Analyze Log File
+# ============================================================
+
+def analyze_log_file(
+    file_path: str | Path,
+) -> Optional[LogReport]:
+    """
+    Reads and analyzes the specified log file.
+    """
+
+    path = Path(file_path)
+
+    try:
+
+        # ----------------------------------------------------
+        # Check File Existence
+        # ----------------------------------------------------
+
+        if not path.exists():
+            raise FileNotFoundError(
+                f"The file '{path}' does not exist."
+            )
+
+        # ----------------------------------------------------
+        # Check Whether Path Is a File
+        # ----------------------------------------------------
+
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"'{path}' is not a valid file."
+            )
+
+        # ----------------------------------------------------
+        # Counters
+        # ----------------------------------------------------
+
+        log_counts = Counter()
+
+        error_logs: List[str] = []
+
+        invalid_count = 0
+
+        # ----------------------------------------------------
+        # Read File
+        # ----------------------------------------------------
+
+        with path.open(
+            "r",
+            encoding="utf-8",
+        ) as file:
+
+            for line_number, line in enumerate(
+                file,
+                start=1,
+            ):
+
+                try:
+
+                    level, parsed_line = parse_log_line(
+                        line
+                    )
+
+                    # Ignore empty lines
+                    if level is None:
+                        continue
+
+                    # Count log type
+                    log_counts[level] += 1
+
+                    # Store ERROR logs separately
+                    if level == "ERROR":
+                        error_logs.append(parsed_line)
+
+                except ValueError as error:
+
+                    invalid_count += 1
+
+                    print(
+                        f"[Warning] Line {line_number}: "
+                        f"{error}"
+                    )
+
+        # ----------------------------------------------------
+        # Calculate Total Valid Logs
+        # ----------------------------------------------------
+
+        total_logs = sum(log_counts.values())
+
+        # ----------------------------------------------------
+        # Handle File With No Valid Logs
+        # ----------------------------------------------------
+
+        if total_logs == 0:
+
+            print(
+                "[Notice] The log file contains "
+                "no valid log entries."
+            )
+
+            return None
+
+        # ----------------------------------------------------
+        # Find Most Frequent Log Type
+        # ----------------------------------------------------
+
+        most_frequent = (
+            log_counts.most_common(1)[0][0]
+        )
+
+        # ----------------------------------------------------
+        # Create Report
+        # ----------------------------------------------------
+
+        return LogReport(
+            total_logs=total_logs,
+            info_count=log_counts["INFO"],
+            warning_count=log_counts["WARNING"],
+            error_count=log_counts["ERROR"],
+            invalid_count=invalid_count,
+            most_frequent=most_frequent,
+            error_logs=error_logs,
+        )
+
+    # --------------------------------------------------------
+    # File Not Found
+    # --------------------------------------------------------
+
+    except FileNotFoundError as error:
+
+        print(f"[Error] {error}")
+
+    # --------------------------------------------------------
+    # Permission Error
+    # --------------------------------------------------------
+
+    except PermissionError:
+
+        print(
+            f"[Error] Permission denied: "
+            f"Cannot read '{path}'."
+        )
+
+    # --------------------------------------------------------
+    # Encoding Error
+    # --------------------------------------------------------
+
+    except UnicodeDecodeError:
+
+        print(
+            f"[Error] Unable to decode '{path}'. "
+            f"Please make sure the file is UTF-8 encoded."
+        )
+
+    # --------------------------------------------------------
+    # Unexpected Error
+    # --------------------------------------------------------
+
+    except OSError as error:
+
+        print(
+            f"[Error] Unable to read the file: {error}"
+        )
+
+    return None
+
+
+# ============================================================
+# Print Report
+# ============================================================
+
+def print_report(
+    report: LogReport,
+) -> None:
+    """
+    Displays the analysis report.
+    """
+
+    print()
+    print("=" * 50)
+    print("              LOG SUMMARY REPORT")
+    print("=" * 50)
+
+    print(
+        f"{'Total Logs':<30}: "
+        f"{report.total_logs}"
+    )
+
+    print(
+        f"{'Total INFO Logs':<30}: "
+        f"{report.info_count}"
+    )
+
+    print(
+        f"{'Total WARNING Logs':<30}: "
+        f"{report.warning_count}"
+    )
+
+    print(
+        f"{'Total ERROR Logs':<30}: "
+        f"{report.error_count}"
+    )
+
+    print(
+        f"{'Invalid Log Entries':<30}: "
+        f"{report.invalid_count}"
+    )
+
+    print(
+        f"{'Most Frequent Log Type':<30}: "
+        f"{report.most_frequent}"
+    )
+
+    print("=" * 50)
+
+    # --------------------------------------------------------
+    # Display ERROR Logs
+    # --------------------------------------------------------
+
+    print("\n--- ERROR LOGS ---")
+
+    if report.error_logs:
+
+        for index, error_log in enumerate(
+            report.error_logs,
+            start=1,
+        ):
+            print(
+                f"{index}. {error_log}"
+            )
+
+    else:
+
+        print("No ERROR logs found.")
+
+    print("-" * 50)
+
+
+# ============================================================
+# Main Program
+# ============================================================
+
+def main() -> None:
+    """
+    Application entry point.
+    """
+
+    print("=" * 50)
+    print("              LOG FILE ANALYZER")
+    print("=" * 50)
+
+    file_name = input(
+        "Enter log file path: "
+    ).strip()
+
+    # --------------------------------------------------------
+    # Validate User Input
+    # --------------------------------------------------------
+
+    if not file_name:
+
+        print(
+            "[Error] File path cannot be empty."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Analyze File
+    # --------------------------------------------------------
+
+    print(
+        f"\nAnalyzing log file: '{file_name}'..."
+    )
+
+    report = analyze_log_file(
+        file_name
+    )
+
+    # --------------------------------------------------------
+    # Display Report
+    # --------------------------------------------------------
+
+    if report is not None:
+
+        print_report(report)
+
+
+# ============================================================
+# Program Entry Point
+# ============================================================
+
+if __name__ == "__main__":
+    main()
+
+
+
+server.log
+
+
+2026-06-06 08:00:01 INFO - Server initialized.
+2026-06-06 08:05:12 WARNING - High memory usage detected.
+2026-06-06 08:10:45 ERROR - Database connection timeout.
+
+2026-06-06 08:15:00 INFO - User login successful.
+2026-06-06 08:20:11 ERROR - Null pointer exception in module X.
+
+2026-06-06 08:25:30 INFO - Server stopped.
+
+README.md
+
+# Log File Analyzer
+
+## 1. Project Title
+
+**Log File Analyzer**
+
+## 2. Project Description
+
+Log File Analyzer is a Python-based application that reads a text log file, analyzes the log entries, and generates a summary report.
+
+The application identifies different log levels such as INFO, WARNING, and ERROR. It counts each log type, displays all ERROR logs separately, and identifies the most frequently occurring log type.
+
+## 3. Objectives
+
+The main objectives of this project are:
+
+* To read log data from a text file.
+* To count INFO, WARNING, and ERROR logs.
+* To display ERROR logs separately.
+* To find the most frequent log type.
+* To generate a clear summary report.
+* To handle invalid log entries gracefully.
+* To handle missing files and permission errors.
+
+## 4. Features
+
+* Text file log analysis
+* INFO log counting
+* WARNING log counting
+* ERROR log counting
+* Separate ERROR log display
+* Most frequent log type detection
+* Invalid log format validation
+* Empty line handling
+* File not found handling
+* Permission error handling
+* UTF-8 encoding error handling
+* Structured summary report
+
+## 5. Technologies Used
+
+* **Programming Language:** Python
+* **File Handling:** Python File I/O
+* **Data Processing:** Counter
+* **Data Structure:** Dataclass
+* **Path Handling:** pathlib
+* **Exception Handling:** try-except
+
+## 6. Log Format
+
+The application expects log entries in the following format:
+
+```text
+YYYY-MM-DD HH:MM:SS LEVEL - MESSAGE
+```
+
+Example:
+
+```text
+2026-06-06 08:00:01 INFO - Server initialized.
+2026-06-06 08:05:12 WARNING - High memory usage detected.
+2026-06-06 08:10:45 ERROR - Database connection timeout.
+```
+
+## 7. Output
+
+The application generates a summary report containing:
+
+* Total Logs
+* Total INFO Logs
+* Total WARNING Logs
+* Total ERROR Logs
+* Invalid Log Entries
+* Most Frequent Log Type
+
+It also displays all ERROR logs separately.
+
+## 8. Validation and Exception Handling
+
+The application handles the following cases:
+
+### Missing File
+
+If the specified log file does not exist, an appropriate error message is displayed.
+
+### Permission Error
+
+If the application does not have permission to read the file, a permission error is displayed.
+
+### Invalid Log Entry
+
+Invalid log entries are detected and reported without stopping the complete analysis.
+
+### Empty Lines
+
+Empty lines are ignored during log processing.
+
+## 9. Sample Result
+
+```text
+==================================================
+              LOG SUMMARY REPORT
+==================================================
+Total Logs                    : 6
+Total INFO Logs               : 3
+Total WARNING Logs            : 1
+Total ERROR Logs              : 2
+Invalid Log Entries           : 0
+Most Frequent Log Type        : INFO
+==================================================
+
+--- ERROR LOGS ---
+1. 2026-06-06 08:10:45 ERROR - Database connection timeout.
+2. 2026-06-06 08:20:11 ERROR - Null pointer exception in module X.
+--------------------------------------------------
+```
+
+## 10. Conclusion
+
+The Log File Analyzer provides a simple and reliable way to analyze application log files. It summarizes important log information, identifies frequent log types, displays ERROR entries separately, and handles common file and data validation errors gracefully.
+
+```
+
+
+Project_Report.docx
+
+
+# LOG FILE ANALYZER
+
+## 1. Introduction
+
+Log files are commonly used in software applications and computer systems to record important events, warnings, and errors. Analyzing these logs manually can be time-consuming when the file contains a large number of entries.
+
+The **Log File Analyzer** is a Python-based application designed to read and analyze log files automatically. It identifies INFO, WARNING, and ERROR log entries, counts each type, finds the most frequently occurring log type, and displays ERROR logs separately.
+
+The application also includes validation and exception handling to manage empty lines, invalid log entries, missing files, and permission-related errors.
+
+---
+
+## 2. Problem Statement
+
+Manually analyzing log files can make it difficult to quickly identify important errors and understand the overall system activity.
+
+The purpose of this project is to develop a Python application that automatically analyzes a log file and generates a clear summary report containing important log information.
+
+---
+
+## 3. Objectives
+
+The main objectives of the Log File Analyzer are:
+
+* To read log data from a text file.
+* To identify INFO, WARNING, and ERROR log entries.
+* To count the number of each log type.
+* To display all ERROR logs separately.
+* To identify the most frequent log type.
+* To generate a summary report.
+* To ignore empty lines.
+* To handle invalid log formats gracefully.
+* To handle missing files.
+* To handle permission errors.
+
+---
+
+## 4. Project Requirements
+
+### Functional Requirements
+
+The application should:
+
+1. Read log data from a text file.
+2. Count INFO logs.
+3. Count WARNING logs.
+4. Count ERROR logs.
+5. Display ERROR logs separately.
+6. Find the most frequent log type.
+7. Generate a summary report.
+
+### Validation Requirements
+
+The application should:
+
+* Ignore empty lines.
+* Detect invalid log formats.
+* Handle missing log files.
+* Handle invalid log entries without stopping the complete analysis.
+
+### Exception Handling
+
+The application handles:
+
+* FileNotFoundError
+* PermissionError
+* UnicodeDecodeError
+* OSError
+* Invalid log entries using ValueError
+
+---
+
+## 5. Technologies Used
+
+| Technology         | Purpose                                |
+| ------------------ | -------------------------------------- |
+| Python             | Application development                |
+| File Handling      | Reading log files                      |
+| Counter            | Counting log types                     |
+| Dataclass          | Storing report information             |
+| pathlib            | File path handling                     |
+| Exception Handling | Handling runtime and validation errors |
+
+---
+
+## 6. Log File Format
+
+The application expects log entries in the following format:
+
+```text
+YYYY-MM-DD HH:MM:SS LEVEL - MESSAGE
+```
+
+Example:
+
+```text
+2026-06-06 08:00:01 INFO - Server initialized.
+2026-06-06 08:05:12 WARNING - High memory usage detected.
+2026-06-06 08:10:45 ERROR - Database connection timeout.
+```
+
+---
+
+## 7. System Workflow
+
+The application follows these steps:
+
+1. The user enters the log file path.
+2. The application checks whether the file exists.
+3. The log file is opened and read line by line.
+4. Empty lines are ignored.
+5. Each log entry is validated.
+6. INFO, WARNING, and ERROR logs are counted.
+7. ERROR logs are stored separately.
+8. Invalid log entries are reported.
+9. The most frequent log type is identified.
+10. A summary report is generated.
+11. ERROR logs are displayed separately.
+
+### Workflow
+
+```text
+User
+  |
+  v
+Enter Log File Path
+  |
+  v
+Check File
+  |
+  +------ File Not Found ------> Display Error
+  |
+  v
+Read Log File
+  |
+  v
+Ignore Empty Lines
+  |
+  v
+Validate Log Entry
+  |
+  +------ Invalid ------> Display Warning
+  |
+  v
+Identify Log Type
+  |
+  +---- INFO
+  |
+  +---- WARNING
+  |
+  +---- ERROR
+          |
+          v
+    Store ERROR Log
+          |
+          v
+Generate Summary Report
+          |
+          v
+Display Results
+```
+
+---
+
+## 8. Implementation
+
+The project is implemented using Python functions.
+
+### Main Components
+
+#### `parse_log_line()`
+
+This function validates and parses individual log entries. It identifies the log level and checks the basic structure of the log entry.
+
+#### `analyze_log_file()`
+
+This function reads the complete log file, counts the different log types, stores ERROR logs, handles invalid entries, and generates the analysis report.
+
+#### `print_report()`
+
+This function displays the summary report and the ERROR logs in a clear format.
+
+#### `main()`
+
+This function acts as the entry point of the application and accepts the log file path from the user.
+
+---
+
+## 9. Validation and Exception Handling
+
+Validation and exception handling are important parts of the application.
+
+### Empty Lines
+
+Empty lines are ignored and are not counted as log entries.
+
+### Invalid Log Format
+
+If a log entry does not follow the expected format, the application displays a warning and continues processing the remaining entries.
+
+Example:
+
+```text
+Invalid log entry
+```
+
+Output:
+
+```text
+[Warning] Line 7: Invalid log format.
+```
+
+### File Not Found
+
+If the specified file does not exist, the application displays an appropriate error message.
+
+Example:
+
+```text
+Enter log file path: wrongfile.log
+
+[Error] The file 'wrongfile.log' does not exist.
+```
+
+### Permission Error
+
+If the application does not have permission to access the file, a permission error is displayed.
+
+### Encoding Error
+
+If the file cannot be decoded using UTF-8 encoding, the application displays an appropriate error message.
+
+---
+
+## 10. Sample Input
+
+The sample `server.log` file contains:
+
+```text
+2026-06-06 08:00:01 INFO - Server initialized.
+2026-06-06 08:05:12 WARNING - High memory usage detected.
+2026-06-06 08:10:45 ERROR - Database connection timeout.
+2026-06-06 08:15:00 INFO - User login successful.
+2026-06-06 08:20:11 ERROR - Null pointer exception in module X.
+2026-06-06 08:25:30 INFO - Server stopped.
+```
+
+---
+
+## 11. Sample Output
+
+```text
+==================================================
+              LOG SUMMARY REPORT
+==================================================
+Total Logs                    : 6
+Total INFO Logs               : 3
+Total WARNING Logs            : 1
+Total ERROR Logs              : 2
+Invalid Log Entries           : 0
+Most Frequent Log Type        : INFO
+==================================================
+
+--- ERROR LOGS ---
+1. 2026-06-06 08:10:45 ERROR - Database connection timeout.
+2. 2026-06-06 08:20:11 ERROR - Null pointer exception in module X.
+--------------------------------------------------
+```
+
+---
+
+## 12. Testing
+
+The application was tested using different scenarios.
+
+| Test Case      | Input              | Expected Result              | Status |
+| -------------- | ------------------ | ---------------------------- | ------ |
+| Valid log file | `server.log`       | Generate summary             | Passed |
+| INFO logs      | INFO entries       | Count INFO logs              | Passed |
+| WARNING logs   | WARNING entries    | Count WARNING logs           | Passed |
+| ERROR logs     | ERROR entries      | Count and display errors     | Passed |
+| Empty line     | Blank line         | Ignore line                  | Passed |
+| Invalid entry  | Invalid log format | Display warning              | Passed |
+| Missing file   | `wrongfile.log`    | Display file-not-found error | Passed |
+
+### Test Result
+
+All required test cases were successfully executed.
+
+---
+
+## 13. Advantages
+
+* Simple and easy to use.
+* Automatically analyzes log files.
+* Reduces manual log analysis.
+* Quickly identifies ERROR logs.
+* Provides a clear summary report.
+* Handles invalid data gracefully.
+* Handles common file-related errors.
+
+---
+
+## 14. Future Enhancements
+
+The project can be enhanced in the future by adding:
+
+* Graphical User Interface (GUI).
+* Support for multiple log file formats.
+* Date-wise log analysis.
+* Export reports to CSV or PDF.
+* Graphs and charts for log statistics.
+* Real-time log monitoring.
+* Search and filtering functionality.
+
+---
+
+## 15. Conclusion
+
+The **Log File Analyzer** successfully provides an automated solution for analyzing text-based log files.
+
+The application can identify and count INFO, WARNING, and ERROR logs, display ERROR logs separately, determine the most frequent log type, and generate a structured summary report.
+
+The project also demonstrates proper file handling, input validation, and exception handling. Therefore, it provides a simple and effective approach for basic log file analysis using Python.
